@@ -35,37 +35,39 @@ if __name__ == '__main__':
         a = gel.pb_sln
         dfs[i] = gel.sln_df(gel.pb_sln)
         gels[i] = gel
-# r1, phi1, phi01, phis1, dphi1 = pot.potential(R1=1.0, R2=pot.R2)
+    # r1, phi1, phi01, phis1, dphi1 = pot.potential(R1=1.0, R2=pot.R2)
 
-#
-matplotlib.rcParams.update({'font.size': 18})
-# # matplotlib.rcParams["text.latex.preamble"].append(r'\usepackage[dvips]{graphicx}\usepackage{xfrac}')
-plt.rc('text', usetex=True)
-plt.rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
-#
-# # 1/ potential
-plt.xlabel('$r$')
-plt.ylabel('$\phi$')
-plt.show()
-# plt.plot(r1 - pot.R2, phi1, 'r^-', markevery=1000, markeredgecolor='k')
+    #
+    matplotlib.rcParams.update({'font.size': 16})
+    # # matplotlib.rcParams["text.latex.preamble"].append(r'\usepackage[dvips]{graphicx}\usepackage{xfrac}')
+    plt.rc('text', usetex=True)
+    plt.rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
+    #
+    # # 1/ potential
+    plt.xlabel('$r$')
+    plt.ylabel('$\phi$')
+    # plt.show()
+
+    plt.plot(dfs[0]['x']-gels[2].R2, dfs[0]['phi'], 'r^-', markevery=50, markeredgecolor='k')
 # # ,label="$c_{p,\infty} = 2.0$")
 # # plt.plot(-r1,phi1,'ro-',markevery=1000)
 # # plt.plot(r1,cp1*np.sinh(dphi1*p1)/(dphi1*p1),'r^-',markevery=1000)
 #
-# plt.plot(r2 - pot.R2, phi2, 'go-', markevery=1000, markeredgecolor='k')
+    plt.plot(dfs[1]['x']-gels[2].R2, dfs[1]['phi'], 'go-', markevery=50, markeredgecolor='k')
 # # ,label="$c_{p,\infty} = 1.0$")
 # # plt.plot(-r2,phi2,'go-',markevery=1000)
 # # plt.plot(r2,cp2*np.sinh(dphi2*p2)/(dphi2*p2),'g^-',markevery=1000)
 #
-# plt.plot(r3 - pot.R2, phi3, 'bs-', markevery=1000, markeredgecolor='k')
+    plt.plot(dfs[2]['x']-gels[2].R2, dfs[2]['phi'], 'bs-', markevery=50, markeredgecolor='k')
 # # ,label="$c_{p,\infty} = 0.2$")
 # # plt.plot(-r3,phi3,'bo-',markevery=1000)
 #
 # # plt.plot(r3,cp3*np.sinh(dphi3*p3)/(dphi3*p3),'b^-',markevery=1000)
 #
-# plt.legend()
-# plt.xlim(-5., 5)
-# plt.tight_layout()
+    # plt.legend()
+    plt.xlim(-5., 5)
+    plt.tight_layout()
+    plt.savefig('test.pdf', format='pdf', bbox_inches='tight')
 # plt.savefig('potential_variable_cp.eps', format='eps', bbox_inches='tight')
 # plt.show()
 #
