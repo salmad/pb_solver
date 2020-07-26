@@ -5,7 +5,7 @@
 
 
 import numpy as np
-import scikits.bvp1lg as bvp
+# import scikits.bvp1lg as bvp
 import math,os
 import time
 import matplotlib
@@ -14,7 +14,7 @@ from matplotlib import gridspec
 import pylab
 import matplotlib.cbook as cbook
 os.environ['PATH'] = os.environ['PATH'] + '/usr/bin/latex'
-get_ipython().run_line_magic('matplotlib', 'inline')
+# get_ipython().run_line_magic('matplotlib', 'inline')
 import matplotlib.pyplot as plt
 plt.ion()
 

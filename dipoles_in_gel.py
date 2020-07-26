@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[107]:
-
-
 import numpy as np
 # import scikits.bvp1lg as bvp
 import math,os
