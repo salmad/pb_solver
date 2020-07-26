@@ -1,17 +1,20 @@
 from dataclasses import dataclass
-import numpy as np
-from scipy.integrate import solve_bvp
+
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+from scipy.integrate import solve_bvp
+from scipy.interpolate import interp1d
+from scipy.signal import savgol_filter
 
 
 @dataclass
 class Mesh:
-    d: float = 0.005
-    dr: float = 0.001  # in sigma
+    d: float = 0.05
+    dr: float = 0.01  # in sigma
     R1: float = 5.0
     R2: float = 10.0
-    nx: int = 32000
+    nx: int = 1000
 
 
 @dataclass
@@ -20,16 +23,17 @@ class Solution:
 
     # Surface properties
     # dimensionless surface charge
-    rho1: float #= -0.35
-    rho2: float #= -0.35
+    rho1: float  # = -0.35
+    rho2: float  # = -0.35
 
     # dipole
-    c_p: float #= 1.0  # normalised by 2c0
-    p: float #= 0.1
+    c_p: float  # = 1.0  # normalised by 2c0
+    p: float  # = 0.1
 
 
 @dataclass
 class System(Mesh, Solution):
+    nodes: int = 1000
 
     @property
     def Lx(self):
@@ -54,8 +58,6 @@ class System(Mesh, Solution):
 
         return Y
 
-
-
     @property
     def dy_guess(self):
         d_Y = self.calc_dy(self.mesh_r, self.y_guess)
@@ -77,12 +79,10 @@ class System(Mesh, Solution):
     @property
     def pb_sln(self):
         a = solve_bvp(fun=self.calc_dy, bc=self.set_bc, x=self.mesh_r,
-                      y=self.y_guess, max_nodes=10000, bc_tol=1e-4,
-                      tol=1e-4)
+                      y=self.y_guess, max_nodes=self.nodes, bc_tol=1e-3,
+                      tol=1e-3)
 
         return a
-
-
 
     def sln_df(self, a, verbose=False):
         df = pd.DataFrame()
@@ -102,14 +102,14 @@ class System(Mesh, Solution):
     def __post_init__(self):
         self.checker()
 
-
     def checker(self):
         assert self.rho1 == self.rho2
         assert self.R2 >= self.R1
         assert self.R2 <= self.Lx
         a = self.pb_sln
-        assert a.rms_residuals.max() < 0.1
-        assert a.rms_residuals.sum() < 0.2
+        print(a.rms_residuals.max(), a.rms_residuals.sum())
+        assert a.rms_residuals.max() < 0.25
+        assert a.rms_residuals.sum() < 1
         assert np.abs(a.y[1][0]) < 0.01
         assert np.abs(a.y[1][-1]) < 0.01
         assert np.abs(a.y[0][-1]) < 0.01
@@ -133,8 +133,12 @@ class System(Mesh, Solution):
         setattr(cls, key, value)
 
 
+def sigmoid(x, d=0.01):
+    return 1 - 1 / (1 + np.exp(-x / d))
+
+
 # homogeneous
-def delta(x_mesh, start, end):
+def delta(x_mesh, start, end, use_sigmoid=True, width=0.01):
     """
 
     :param x_mesh:
@@ -147,7 +151,10 @@ def delta(x_mesh, start, end):
     x0 = start
     r = x_mesh
 
-    return 0.5 * (np.sign(r - x0) + 1) - 0.5 * (np.sign(-d + r - x0) + 1.0)
+    if use_sigmoid:
+        return sigmoid(x_mesh - end, width) - sigmoid(x_mesh - start, width)
+    else:
+        return 0.5 * (np.sign(r - x0) + 1) - 0.5 * (np.sign(-d + r - x0) + 1.0)
 
 
 def phis_DH(rho, R):
@@ -175,7 +182,9 @@ def charge_density(r, y, system: System):
     rho2 = system.rho2
     R1 = system.R1
     R2 = system.R2
-    return - (np.sinh(y) - rho1 * delta(r, start=d, end=R1 + d) - rho2 * delta(r, end=R2 + d, start=R1 + d))
+    cd = - (np.sinh(y) - rho1 * delta(r, start=0, end=R1) - rho2 * delta(r, end=R2, start=R1))
+    # cd = interp1d(r, cd, kind='cubic')
+    return cd
 
 
 def langevin(x):
@@ -205,9 +214,11 @@ def depsilon(E, system: System):
 def fsub(r, Y, system: System):
     """The equations, in the form: Y' = f(x, Y)."""
     y, dy = Y
+    # d_y = np.where(np.abs(dy)<1e-6,0 ,dy)
     d_y = dy
     d_dy = - charge_density(r, y, system=system)
     d_dy /= epsilon(dy, system=system) + depsilon(dy, system=system) * dy
+    # d_dy = np.where(np.abs(d_dy) < 1e-6, 0, d_dy)
     return np.array([d_y, d_dy])
 
 
@@ -235,28 +246,22 @@ def guess(r, system: System):
 
 
 if __name__ == '__main__':
+    gel = System(rho1=-0.2, rho2=-0.2, c_p=1, p=.1)
+    print(gel.print_params())
 
+    a = gel.pb_sln
 
-
-    system = System(rho1=-0.1, rho2=-.1, c_p=.5, p=.1)
-    print(system.print_params())
-
-    a = system.pb_sln
-
-    df= system.sln_df(a)
+    df = gel.sln_df(a)
     print(a.rms_residuals.max(), a.rms_residuals.sum())
 
-
-
-    plt.plot(system.mesh_r, system.y_guess[0])
+    cd = charge_density(gel.mesh_r, a.y[0] * 0, gel)
+    plt.plot(a.x, cd)
+    plt.plot(gel.mesh_r, gel.y_guess[0])
     plt.plot(a.x, a.y[0])
-
+    plt.show()
 
     # plt.plot(df['x'], df['phi'])
     #
     # plt.plot(df['x'], df['dphi'])
     # plt.plot(df['x'], df['c_an'])
     # plt.plot(df['x'], df['c_cat'])
-
-
-
