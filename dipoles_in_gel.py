@@ -13,7 +13,6 @@ import matplotlib.cbook as cbook
 os.environ['PATH'] = os.environ['PATH'] + '/usr/bin/latex'
 # get_ipython().run_line_magic('matplotlib', 'inline')
 import matplotlib.pyplot as plt
-plt.ion()
 
 import scipy.interpolate
 from matplotlib import colors

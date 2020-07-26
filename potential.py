@@ -1,16 +1,16 @@
-# import scikits.bvp1lg as bvp
 from dataclasses import dataclass
-
 import numpy as np
 from scipy.integrate import solve_bvp
+import matplotlib.pyplot as plt
+import pandas as pd
 
 
 @dataclass
 class Mesh:
     d: float = 0.005
     dr: float = 0.001  # in sigma
-    R1: float = 1.0
-    R2: float = 3.0
+    R1: float = 5.0
+    R2: float = 10.0
     nx: int = 32000
 
 
@@ -20,12 +20,12 @@ class Solution:
 
     # Surface properties
     # dimensionless surface charge
-    rho1: float = -0.35
-    rho2: float = -0.35
+    rho1: float #= -0.35
+    rho2: float #= -0.35
 
     # dipole
-    c_p: float = 1.0  # normalised by 2c0
-    p: float = 0.1
+    c_p: float #= 1.0  # normalised by 2c0
+    p: float #= 0.1
 
 
 @dataclass
@@ -33,21 +33,92 @@ class System(Mesh, Solution):
 
     @property
     def Lx(self):
-        return self.R2 + 20
+        return self.R2 + 10
 
-    def dy(self, r, Y):
+    def calc_dy(self, r, Y):
         return fsub(r, Y, system=self)
 
-    def y_dy_guess(self, r):
-        return guess(r, system=self)
+    @property
+    def y_guess(self):
+        rho1 = self.rho1
+        rho2 = self.rho2
+        R1 = self.R1
+        R2 = self.R2
 
-    def bc(self, Y_a, Y_b):
+        y = pot_DH(self.mesh_r, rho2, R2)
+        dy = dpot_DH(self.mesh_r, rho2, R2)
+        # ~ v = phi1*np.exp(-x)
+        # ~ dv = phi1*np.exp(-x+H)
+
+        Y = np.array([y, dy])
+
+        return Y
+
+
+
+    @property
+    def dy_guess(self):
+        d_Y = self.calc_dy(self.mesh_r, self.y_guess)
+        return d_Y
+
+    def set_bc(self, Y_a, Y_b):
         """The boundary conditions."""
         return gsub(Y_a, Y_b)
 
+    @property
+    def mesh_r(self):
+        return np.linspace(self.d, self.Lx, self.nx)
+
+    # @property
+    # TODO : decide if needed to compute
+    # def phis(self):
+    #     y[(np.abs(R2 - r)).argmin()],
+
+    @property
+    def pb_sln(self):
+        a = solve_bvp(fun=self.calc_dy, bc=self.set_bc, x=self.mesh_r,
+                      y=self.y_guess, max_nodes=10000, bc_tol=1e-4,
+                      tol=1e-4)
+
+        return a
+
+
+
+    def sln_df(self, a, verbose=False):
+        df = pd.DataFrame()
+        df['x'] = a.x
+        df['phi'] = a.y[0]
+        df['dphi'] = a.y[1]
+        df['c_cat'] = np.exp(-a.y[0])
+        df['c_an'] = np.exp(a.y[0])
+        df['phis'] = a.y[0][(np.abs(self.R2 - self.mesh_r)).argmin()]
+        df['dphis'] = a.y[1][(np.abs(self.R2 - self.mesh_r)).argmin()]
+        df['rms'] = np.insert(a.rms_residuals, 0, np.NaN)
+        if verbose:
+            df['yp_0'] = a.yp[0]
+            df['yp_1'] = a.yp[1]
+        return df
+
+    def __post_init__(self):
+        self.checker()
+
+
+    def checker(self):
+        assert self.rho1 == self.rho2
+        assert self.R2 >= self.R1
+        assert self.R2 <= self.Lx
+        a = self.pb_sln
+        assert a.rms_residuals.max() < 0.1
+        assert a.rms_residuals.sum() < 0.2
+        assert np.abs(a.y[1][0]) < 0.01
+        assert np.abs(a.y[1][-1]) < 0.01
+        assert np.abs(a.y[0][-1]) < 0.01
+        return True
+
     def print_params(self):
         print(" *** Printing system parameters ***")
-        print(f"  Microgel dimensioless radius  kR1 = {self.R1}")
+        self.checker()
+        print(f"  Microgel dimensioless radius  kR1 =  {self.R1}")
         print("  Microgel dimensioless radius  kR2 = ", self.R2)
         print("  Microgel dimensioless charge rho1 = ", self.rho1)
         print("  Microgel dimensioless charge rho2 = ", self.rho2)
@@ -55,6 +126,11 @@ class System(Mesh, Solution):
         print("  Avoiding singularity at r = 0, d  = ", self.d)
         print(" ***  ***  *** *** *** *** *** ***    ")
         return 0
+
+    @classmethod
+    def __setitem__(cls, key, value):
+        cls.checker()
+        setattr(cls, key, value)
 
 
 # homogeneous
@@ -139,7 +215,7 @@ def gsub(Y_a, Y_b):
     """The boundary conditions."""
     y_a, dy_a = Y_a
     y_b, dy_b = Y_b
-    return np.array([dy_a , y_b])
+    return np.array([dy_a, y_b])
 
 
 def guess(r, system: System):
@@ -159,27 +235,28 @@ def guess(r, system: System):
 
 
 if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-    import pandas as pd
 
-    system = System(R1=5, R2=10, nx=1000, d=0.01)
+
+
+    system = System(rho1=-0.1, rho2=-.1, c_p=.5, p=.1)
     print(system.print_params())
 
-    r = np.linspace(system.d, system.Lx, system.nx)
-    Y, d_Y = guess(r, system=system)
+    a = system.pb_sln
 
-    a = solve_bvp(fun=system.dy, bc=system.bc, x=r, y=Y, max_nodes=10000, bc_tol=1e-8,tol=1e-8)
-    a.message
-    a.success
-    a.x
-    plt.plot(r, d_Y[0])
-    plt.plot(a.x, a.y[1])
-    print(a.y[1][1], a.y[1][-1])
-    print(a.y[0][0], a.y[0][-1])
-    print(a.rms_residuals.max())
-    df = pd.DataFrame()
-    df['x'] = a.x
-    df['y'] = a.y[0]
-    df['dy'] = a.y[1]
-    df['rms'] = np.insert(a.rms_residuals,0,-1)
-    df.sort_values('rms', ascending=False)
+    df= system.sln_df(a)
+    print(a.rms_residuals.max(), a.rms_residuals.sum())
+
+
+
+    plt.plot(system.mesh_r, system.y_guess[0])
+    plt.plot(a.x, a.y[0])
+
+
+    # plt.plot(df['x'], df['phi'])
+    #
+    # plt.plot(df['x'], df['dphi'])
+    # plt.plot(df['x'], df['c_an'])
+    # plt.plot(df['x'], df['c_cat'])
+
+
+
